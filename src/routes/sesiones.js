@@ -4,6 +4,46 @@ import { mapEstado, moduloACompaniaCodigo } from '../utils.js';
 
 const router = Router();
 
+/**
+ * GET /v1/sesiones?compania=grupoproser&limit=20
+ * Lista recientes (QA / auditoría).
+ */
+router.get('/', async (req, res) => {
+  try {
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
+    const codigo =
+      String(req.query.compania || '').trim() ||
+      (req.query.modulo ? moduloACompaniaCodigo(req.query.modulo) : '');
+    const params = [];
+    let where = 'TRUE';
+    if (codigo) {
+      params.push(codigo);
+      where = `c.codigo = $${params.length}`;
+    }
+    params.push(limit);
+    const { rows } = await query(
+      `SELECT
+         s.id, s.mongo_sesion_id, s.modulo, s.expediente, s.estado,
+         s.nombre_asegurado, s.telefono, s.correo,
+         s.programada_at, s.iniciada_at, s.finalizada_at, s.duracion_segundos,
+         s.semana_iso, s.created_at, s.updated_at,
+         c.codigo AS compania_codigo, c.nombre AS compania_nombre,
+         a.login_arnald, a.nombre AS auditor_nombre
+       FROM videoperitaje.sesiones s
+       JOIN videoperitaje.companias c ON c.id = s.compania_id
+       LEFT JOIN videoperitaje.auditores a ON a.id = s.auditor_id
+       WHERE ${where}
+       ORDER BY s.created_at DESC
+       LIMIT $${params.length}`,
+      params
+    );
+    return res.json({ success: true, data: rows, total: rows.length });
+  } catch (err) {
+    console.error('[sesiones.list]', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 async function resolverCompaniaId(codigo) {
   const { rows } = await query(
     `SELECT id FROM videoperitaje.companias WHERE codigo = $1 AND activa = TRUE LIMIT 1`,
