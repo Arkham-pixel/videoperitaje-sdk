@@ -87,12 +87,14 @@ router.post('/', async (req, res) => {
          mongo_sesion_id, modulo, caso_id, expediente, siniestro, livekit_room, origen,
          compania_id, auditor_id,
          identificacion_asegurado, nombre_asegurado, telefono, correo,
-         estado, duracion_max_minutos, notas
+         estado, duracion_max_minutos, notas, programada_at,
+         ventana_antes_min, ventana_despues_min
        ) VALUES (
          $1, $2, $3, $4, $5, $6, COALESCE($7, 'arnald'),
          $8, $9,
          $10, $11, $12, $13,
-         $14, $15, $16
+         $14, $15, $16, $17::timestamptz,
+         COALESCE($18, 15), COALESCE($19, 60)
        )
        ON CONFLICT (mongo_sesion_id) DO UPDATE SET
          modulo = EXCLUDED.modulo,
@@ -107,6 +109,9 @@ router.post('/', async (req, res) => {
          correo = EXCLUDED.correo,
          estado = EXCLUDED.estado,
          duracion_max_minutos = EXCLUDED.duracion_max_minutos,
+         programada_at = COALESCE(EXCLUDED.programada_at, videoperitaje.sesiones.programada_at),
+         ventana_antes_min = COALESCE(EXCLUDED.ventana_antes_min, videoperitaje.sesiones.ventana_antes_min),
+         ventana_despues_min = COALESCE(EXCLUDED.ventana_despues_min, videoperitaje.sesiones.ventana_despues_min),
          updated_at = NOW()
        RETURNING *`,
       [
@@ -126,6 +131,11 @@ router.post('/', async (req, res) => {
         mapEstado(b.estado || 'pendiente'),
         Number(b.duracion_max_minutos || b.duracionMaxMinutos) || 60,
         String(b.notas || '') || null,
+        b.programada_at || b.programadaAt || null,
+        b.ventana_antes_min != null ? Number(b.ventana_antes_min) : Number(b.ventanaAntesMin) || 15,
+        b.ventana_despues_min != null
+          ? Number(b.ventana_despues_min)
+          : Number(b.ventanaDespuesMin) || 60,
       ]
     );
 
@@ -143,7 +153,7 @@ router.post('/', async (req, res) => {
 
 /**
  * PATCH /v1/sesiones/:mongoSesionId
- * Body: estado, iniciada_at, finalizada_at, duracion_segundos, livekit_room, notas
+ * Body: estado, iniciada_at, finalizada_at, duracion_segundos, livekit_room, notas, programada_at
  */
 router.patch('/:mongoSesionId', async (req, res) => {
   try {
@@ -159,6 +169,7 @@ router.patch('/:mongoSesionId', async (req, res) => {
          duracion_segundos = COALESCE($5, duracion_segundos),
          livekit_room = COALESCE(NULLIF($6, ''), livekit_room),
          notas = COALESCE(NULLIF($7, ''), notas),
+         programada_at = COALESCE($8::timestamptz, programada_at),
          updated_at = NOW()
        WHERE mongo_sesion_id = $1
        RETURNING *`,
@@ -174,6 +185,7 @@ router.patch('/:mongoSesionId', async (req, res) => {
             : null,
         String(b.livekit_room || b.livekitRoom || ''),
         String(b.notas || ''),
+        b.programada_at || b.programadaAt || null,
       ]
     );
 
@@ -183,6 +195,45 @@ router.patch('/:mongoSesionId', async (req, res) => {
     return res.json({ success: true, data: rows[0] });
   } catch (err) {
     console.error('[sesiones.patch]', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * GET /v1/sesiones/:mongoSesionId/puede-iniciar
+ * Valida fecha/hora programada de la videollamada.
+ */
+router.get('/:mongoSesionId/puede-iniciar', async (req, res) => {
+  try {
+    const mongoId = String(req.params.mongoSesionId || '').trim();
+    const { rows } = await query(
+      `SELECT * FROM videoperitaje.puede_iniciar_llamada($1)`,
+      [mongoId]
+    );
+    const row = rows[0] || {
+      permitido: false,
+      motivo: 'sesion_no_encontrada',
+    };
+    const msgs = {
+      muy_temprano: 'Aún no es la hora de la videollamada programada',
+      ventana_vencida: 'La ventana de la videollamada programada ya venció',
+      sesion_cerrada: 'La sesión ya está cerrada',
+      sesion_no_encontrada: 'Sesión no encontrada',
+      ok: null,
+      ok_sin_programacion: null,
+    };
+    return res.json({
+      success: true,
+      permitido: Boolean(row.permitido),
+      motivo: row.motivo,
+      error: row.permitido ? null : msgs[row.motivo] || 'No se puede iniciar la llamada',
+      programada_at: row.programada_at || null,
+      ventana_inicio: row.ventana_inicio || null,
+      ventana_fin: row.ventana_fin || null,
+      ahora: row.ahora || null,
+    });
+  } catch (err) {
+    console.error('[sesiones.puede-iniciar]', err);
     return res.status(500).json({ success: false, error: err.message });
   }
 });

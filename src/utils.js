@@ -3,7 +3,7 @@ export function moduloACompaniaCodigo(modulo = '') {
   const m = String(modulo || '')
     .trim()
     .toLowerCase();
-  if (!m) return 'interna';
+  if (!m || m === 'independiente') return 'grupoproser';
   if (m.startsWith('bbva')) return 'bbva';
   if (m === 'zurich') return 'zurich';
   if (m.startsWith('equidad')) return 'equidad';
@@ -11,7 +11,8 @@ export function moduloACompaniaCodigo(modulo = '') {
   if (m.startsWith('sura')) return 'sura';
   if (m === 'previsora') return 'previsora';
   if (m === 'seguros-alfa' || m === 'alfa' || m === 'segurosalfa') return 'alfa';
-  return 'interna';
+  if (m === 'interna' || m === 'arnald' || m === 'grupoproser') return 'grupoproser';
+  return 'grupoproser';
 }
 
 export function mapEstado(estado) {

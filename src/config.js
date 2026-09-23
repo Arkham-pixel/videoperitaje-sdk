@@ -7,7 +7,7 @@ function truthy(v) {
 }
 
 export const config = {
-  port: Number(process.env.PORT || 3088),
+  port: Number(process.env.PORT || 3000),
   nodeEnv: process.env.NODE_ENV || 'development',
   apiKey: String(process.env.API_KEY || '').trim(),
   corsOrigin: String(process.env.CORS_ORIGIN || '*')

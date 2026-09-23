@@ -2,15 +2,22 @@
 #
 # Flujo: Arnald → este SDK → Postgres (schema videoperitaje)
 #
-# Endpoints (header obligatorio: x-api-key: <API_KEY>)
+# URL producción: https://videosdk.binaria.online
+#
+# Endpoints (header: x-api-key)
 #   GET  /health
-#   GET  /v1/cupo?modulo=bbva-cat
-#   POST /v1/sesiones
-#   PATCH /v1/sesiones/:mongoSesionId
-#   POST /v1/sesiones/:mongoSesionId/eventos
+#   GET  /v1/cupo?modulo=independiente
+#   POST /v1/sesiones   (incluye programada_at)
+#   GET  /v1/sesiones/:mongoId/puede-iniciar
+#   PATCH /v1/sesiones/:mongoId
+#   POST /v1/sesiones/:mongoId/eventos
 #   GET  /v1/companias
 #
-# Coolify: variables de .env.example + hostname interno de Postgres.
+# Tras desplegar, ejecutar en Postgres:
+#   sql/001_grupoproser_programada.sql
+#
+# Coolify vars: API_KEY, PGHOST, PGPORT, PGDATABASE, PGUSER, PGPASSWORD, PGSSL=0, CORS_ORIGIN
+
 
 ## Local
 
