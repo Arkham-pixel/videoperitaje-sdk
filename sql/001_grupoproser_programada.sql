@@ -16,17 +16,13 @@ INSERT INTO videoperitaje.companias (codigo, nombre, activa)
 VALUES ('interna', 'Grupo Proser (interno)', TRUE)
 ON CONFLICT (codigo) DO UPDATE SET activa = TRUE, updated_at = NOW();
 
--- Plan Pro si no hay suscripción activa
-INSERT INTO videoperitaje.compania_suscripciones (compania_id, plan_id, estado)
-SELECT c.id, p.id, 'activa'
-FROM videoperitaje.companias c
-CROSS JOIN videoperitaje.planes p
-WHERE c.codigo IN ('grupoproser', 'interna')
-  AND p.codigo = 'pro'
-  AND NOT EXISTS (
-    SELECT 1 FROM videoperitaje.compania_suscripciones s
-    WHERE s.compania_id = c.id AND s.estado = 'activa'
-  );
+-- NO crear suscripción automática (cupo 0 hasta pago/activación manual).
+-- Para activar tras pago:
+-- INSERT INTO videoperitaje.compania_suscripciones (compania_id, plan_id, estado)
+-- SELECT c.id, p.id, 'activa'
+-- FROM videoperitaje.companias c
+-- CROSS JOIN videoperitaje.planes p
+-- WHERE c.codigo = 'grupoproser' AND p.codigo = 'pro';
 
 -- Auditor Arnald (login de prueba)
 INSERT INTO videoperitaje.auditores (compania_id, login_arnald, nombre, activo)

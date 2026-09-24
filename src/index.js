@@ -7,6 +7,7 @@ import { requireApiKey } from './auth.js';
 import cupoRouter from './routes/cupo.js';
 import sesionesRouter from './routes/sesiones.js';
 import companiasRouter from './routes/companias.js';
+import adminRouter from './routes/admin.js';
 
 const app = express();
 
@@ -41,6 +42,7 @@ app.use('/v1', requireApiKey);
 app.use('/v1/cupo', cupoRouter);
 app.use('/v1/sesiones', sesionesRouter);
 app.use('/v1/companias', companiasRouter);
+app.use('/v1/admin', adminRouter);
 
 app.use((_req, res) => {
   res.status(404).json({ success: false, error: 'Not found' });
