@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import { config } from './config.js';
 import { pingDb } from './db.js';
 import { requireApiKey } from './auth.js';
+import { iniciarAutoCierre } from './autoCierre.js';
 import cupoRouter from './routes/cupo.js';
 import sesionesRouter from './routes/sesiones.js';
 import companiasRouter from './routes/companias.js';
@@ -53,4 +54,5 @@ app.listen(config.port, () => {
   if (!config.apiKey) {
     console.warn('[videoperitaje-sdk] WARNING: API_KEY vacía');
   }
+  iniciarAutoCierre();
 });

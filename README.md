@@ -17,6 +17,8 @@
 #   sql/001_grupoproser_programada.sql
 #
 # Coolify vars: API_KEY, PGHOST, PGPORT, PGDATABASE, PGUSER, PGPASSWORD, PGSSL=0, CORS_ORIGIN
+# Auto-cierre: AUTO_CIERRE_ENABLED=1 (cierra en_proceso al superar duracion_max_minutos)
+# Webhook Arnald (Mongo+LiveKit): ARNALD_CIERRE_WEBHOOK_URL=.../api/videoperitaje/hooks/sdk-cierre
 
 
 ## Local
