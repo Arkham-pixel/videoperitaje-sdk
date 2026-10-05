@@ -137,6 +137,19 @@ async function companiaPorCodigo(codigo) {
   return rows[0] || null;
 }
 
+/** GET /v1/admin/vistas — definición actual de las vistas del schema (diagnóstico). */
+router.get('/vistas', async (_req, res) => {
+  try {
+    const { rows } = await query(
+      `SELECT viewname, pg_get_viewdef(format('%I.%I', schemaname, viewname)::regclass, true) AS definicion
+       FROM pg_views WHERE schemaname = 'videoperitaje' ORDER BY viewname`
+    );
+    return res.json({ success: true, data: rows });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 /** GET /v1/admin/bolsa?compania=grupoproser */
 router.get('/bolsa', async (req, res) => {
   try {
