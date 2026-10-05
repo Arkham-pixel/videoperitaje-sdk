@@ -21,6 +21,47 @@ async function resolverCompaniaId(codigo) {
   return rows[0] || null;
 }
 
+/**
+ * Misma regla que videoperitaje.puede_iniciar_sesion(), pero leyendo las tablas base:
+ * la vista v_cupo_compania se edita a mano desde pgAdmin/Grafana y no es confiable.
+ */
+async function cupoDesdeTablas(companiaId) {
+  const { rows } = await query(
+    `SELECT
+       COALESCE(s.sesiones_por_semana_override, p.sesiones_por_semana) AS sesiones_por_semana,
+       COALESCE(s.sesiones_concurrentes_override, p.sesiones_concurrentes_max) AS sesiones_concurrentes_max,
+       COALESCE(s.duracion_max_minutos_override, p.duracion_max_minutos) AS duracion_max_minutos,
+       (SELECT COUNT(*)::INT FROM videoperitaje.sesiones se
+         WHERE se.compania_id = s.compania_id
+           AND se.semana_iso = videoperitaje.fn_semana_iso(NOW())
+           AND se.estado <> 'cancelada') AS sesiones_usadas_semana,
+       (SELECT COUNT(*)::INT FROM videoperitaje.sesiones se
+         WHERE se.compania_id = s.compania_id
+           AND se.estado = 'en_proceso') AS sesiones_concurrentes_ahora
+     FROM videoperitaje.compania_suscripciones s
+     JOIN videoperitaje.planes p ON p.id = s.plan_id
+     WHERE s.compania_id = $1 AND s.estado = 'activa'
+     LIMIT 1`,
+    [companiaId]
+  );
+  const r = rows[0];
+  if (!r) {
+    return {
+      permitido: false,
+      motivo: 'sin_suscripcion_activa',
+      sesiones_por_semana: 0,
+      sesiones_usadas_semana: 0,
+      sesiones_concurrentes_max: 0,
+      sesiones_concurrentes_ahora: 0,
+      duracion_max_minutos: 60,
+    };
+  }
+  let motivo = 'ok';
+  if (r.sesiones_usadas_semana >= r.sesiones_por_semana) motivo = 'cupo_semanal_agotado';
+  else if (r.sesiones_concurrentes_ahora >= r.sesiones_concurrentes_max) motivo = 'max_concurrentes';
+  return { ...r, permitido: motivo === 'ok', motivo };
+}
+
 /** GET /v1/cupo?modulo=bbva-cat  |  ?compania=bbva */
 router.get('/', async (req, res) => {
   try {
@@ -36,10 +77,7 @@ router.get('/', async (req, res) => {
       });
     }
 
-    const { rows } = await query(`SELECT * FROM videoperitaje.puede_iniciar_sesion($1)`, [
-      compania.id,
-    ]);
-    const cupo = rows[0] || {};
+    const cupo = await cupoDesdeTablas(compania.id);
     let permitido = Boolean(cupo.permitido);
     let motivo = String(cupo.motivo || 'sin_suscripcion_activa');
 
@@ -47,8 +85,9 @@ router.get('/', async (req, res) => {
     const bolsa = await estadoBolsa(compania.id);
     if (bolsa) {
       if (!permitido && motivo === 'cupo_semanal_agotado') {
-        permitido = true;
-        motivo = 'ok';
+        const lleno = cupo.sesiones_concurrentes_ahora >= cupo.sesiones_concurrentes_max;
+        permitido = !lleno;
+        motivo = lleno ? 'max_concurrentes' : 'ok';
       }
       if (permitido && bolsa.sesiones_restantes_bolsa <= 0) {
         permitido = false;
