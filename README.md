@@ -12,6 +12,7 @@
 #   PATCH /v1/sesiones/:mongoId
 #   POST /v1/sesiones/:mongoId/eventos
 #   GET  /v1/companias
+#   GET|PUT /v1/admin/bolsa   (bolsa total sin reinicio semanal; tabla compania_bolsa se crea al arrancar)
 #
 # Tras desplegar, ejecutar en Postgres:
 #   sql/001_grupoproser_programada.sql

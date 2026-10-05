@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { query } from '../db.js';
+import { configurarBolsa, estadoBolsa } from '../bolsa.js';
 
 const router = Router();
 
@@ -124,6 +125,74 @@ router.post('/suscripciones/activar', async (req, res) => {
     });
   } catch (err) {
     console.error('[admin.activar]', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+async function companiaPorCodigo(codigo) {
+  const { rows } = await query(
+    `SELECT id, codigo, nombre FROM videoperitaje.companias WHERE codigo = $1 LIMIT 1`,
+    [codigo]
+  );
+  return rows[0] || null;
+}
+
+/** GET /v1/admin/bolsa?compania=grupoproser */
+router.get('/bolsa', async (req, res) => {
+  try {
+    const codigo = String(req.query.compania || 'grupoproser').trim();
+    const compania = await companiaPorCodigo(codigo);
+    if (!compania) {
+      return res.status(404).json({ success: false, error: `Compañía "${codigo}" no encontrada` });
+    }
+    const { rows } = await query(
+      `SELECT COUNT(*)::INT AS total, MIN(created_at) AS primera, MAX(created_at) AS ultima
+       FROM videoperitaje.sesiones WHERE compania_id = $1`,
+      [compania.id]
+    );
+    return res.json({
+      success: true,
+      compania,
+      bolsa: await estadoBolsa(compania.id),
+      sesiones_pg: rows[0],
+    });
+  } catch (err) {
+    console.error('[admin.bolsa.get]', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * PUT /v1/admin/bolsa
+ * Body: { "compania": "grupoproser", "sesiones_bolsa": 300,
+ *         "usadas_previas": 0, "desde": null, "notas": "..." }
+ * usadas_previas = sesiones consumidas antes de que el SDK las registrara.
+ */
+router.put('/bolsa', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const codigo = String(b.compania || 'grupoproser').trim();
+    const sesionesBolsa = Number(b.sesiones_bolsa);
+    if (!Number.isInteger(sesionesBolsa) || sesionesBolsa <= 0) {
+      return res.status(400).json({ success: false, error: 'sesiones_bolsa debe ser entero > 0' });
+    }
+    const usadasPrevias = b.usadas_previas != null ? Number(b.usadas_previas) : null;
+    if (usadasPrevias != null && (!Number.isInteger(usadasPrevias) || usadasPrevias < 0)) {
+      return res.status(400).json({ success: false, error: 'usadas_previas debe ser entero >= 0' });
+    }
+    const compania = await companiaPorCodigo(codigo);
+    if (!compania) {
+      return res.status(404).json({ success: false, error: `Compañía "${codigo}" no encontrada` });
+    }
+    const bolsa = await configurarBolsa(compania.id, {
+      sesionesBolsa,
+      usadasPrevias,
+      desde: 'desde' in b ? b.desde : undefined,
+      notas: b.notas,
+    });
+    return res.json({ success: true, compania, bolsa });
+  } catch (err) {
+    console.error('[admin.bolsa.put]', err);
     return res.status(500).json({ success: false, error: err.message });
   }
 });

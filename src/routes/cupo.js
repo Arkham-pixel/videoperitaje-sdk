@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { query } from '../db.js';
+import { estadoBolsa } from '../bolsa.js';
 import { moduloACompaniaCodigo } from '../utils.js';
 
 const router = Router();
@@ -8,6 +9,7 @@ const MOTIVO_MSG = {
   sin_suscripcion_activa: 'La compañía no tiene suscripción activa de videoperitaje',
   cupo_semanal_agotado: 'Cupo semanal de sesiones agotado para esta compañía',
   max_concurrentes: 'Ya hay el máximo de sesiones simultáneas para esta compañía',
+  bolsa_agotada: 'Bolsa de videoperitajes agotada. Contrate una nueva bolsa para continuar.',
 };
 
 async function resolverCompaniaId(codigo) {
@@ -38,8 +40,21 @@ router.get('/', async (req, res) => {
       compania.id,
     ]);
     const cupo = rows[0] || {};
-    const permitido = Boolean(cupo.permitido);
-    const motivo = String(cupo.motivo || 'sin_suscripcion_activa');
+    let permitido = Boolean(cupo.permitido);
+    let motivo = String(cupo.motivo || 'sin_suscripcion_activa');
+
+    // Con bolsa configurada, el tope semanal no aplica: manda la bolsa total.
+    const bolsa = await estadoBolsa(compania.id);
+    if (bolsa) {
+      if (!permitido && motivo === 'cupo_semanal_agotado') {
+        permitido = true;
+        motivo = 'ok';
+      }
+      if (permitido && bolsa.sesiones_restantes_bolsa <= 0) {
+        permitido = false;
+        motivo = 'bolsa_agotada';
+      }
+    }
 
     return res.json({
       success: true,
@@ -53,6 +68,13 @@ router.get('/', async (req, res) => {
         sesiones_concurrentes_max: cupo.sesiones_concurrentes_max,
         sesiones_concurrentes_ahora: cupo.sesiones_concurrentes_ahora,
         duracion_max_minutos: cupo.duracion_max_minutos,
+        ...(bolsa
+          ? {
+              sesiones_bolsa: bolsa.sesiones_bolsa,
+              sesiones_usadas_bolsa: bolsa.sesiones_usadas_bolsa,
+              sesiones_restantes_bolsa: bolsa.sesiones_restantes_bolsa,
+            }
+          : {}),
       },
     });
   } catch (err) {
